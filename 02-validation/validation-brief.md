@@ -8,10 +8,10 @@ I'm testing whether if we switch the way we interact with the CRM our internal t
 ## 2 · Risk type & kill switch
 - **Risk type:** Value
 - **Build to test it:** Landing page
-- **Kill switch:** Feature Adoption below 50%→ premise was wrong, pivot the CRM workflow.
+- **Kill switch:** If when displaying this to the Customer Success colleagues, more than 50% of them don't understand at a glance what the Daily Queue screen is for→ premise was wrong, pivot the CRM workflow.
 
 ## 3 · Success criteria
-More than 50% of the internal team integrates the CRM feature into their daily task workflow
+More than 50% of the internal team integrates the CRM Dialy Queue functionatily into their daily task workflow
 
 ## 4 · Problem Framework
 1. **Goal**, Improve CRM adoption in the internal team

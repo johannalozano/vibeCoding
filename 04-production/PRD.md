@@ -1,12 +1,12 @@
 # PRD — Daily Action Queue (CRM prototype)
 
-Status: prototype-derived PRD. Everything described below is reverse-engineered from a clickable front-end prototype with **no backend**. Sections flag mocked vs. real explicitly.
+Status: prototype-derived PRD. Everything described below is reverse-engineered from a clickable front-end prototype with **no backend**. Sections flag mocked vs. real explicitly. Product assumptions that the prototype cannot validate are labeled as such rather than treated as established facts.
 
 ## Problem
 
 Revenue and customer-success teams keep a "shadow spreadsheet" next to the CRM because the CRM tells them what *exists* (records, pipelines, tickets) but not what to *do next today*. Work spans deals, onboardings, support escalations and follow-ups, each living in a different object with a different stage model, so the rep rebuilds a single prioritized list by hand every morning. Logging the outcome afterwards costs a multi-field form, so it often doesn't happen and the data decays.
 
-**Validated hypothesis (from the prototype):** if the CRM presents one cross-object list ranked by committed date and account value, states *why* each item is on the list, and lets the rep record the outcome in one tap without required fields, the shadow spreadsheet becomes unnecessary and touch data stays current. The prototype demonstrates that this list is legible and actionable in a single screen and that every routine update (call, note, stage, snooze, complete, email) is reachable inline from the same card.
+**Prototype-supported hypothesis:** if the CRM presents one cross-object list ranked by urgency, committed date and account value, states *why* each item is on the list, and lets the rep record the outcome inline with no required fields, reps should need less manual prioritization and should be more likely to keep touch data current. The prototype demonstrates the interaction feasibility of this approach: the queue is presented on one screen, rank and rationale are visible, and every routine update (call, note, stage, snooze, complete, email) is reachable from the item card. Whether this actually replaces the shadow spreadsheet or improves CRM hygiene remains a user-validation question.
 
 ## Users & jobs
 
@@ -21,10 +21,17 @@ Supporting jobs:
 
 **Secondary users (not designed for yet):** manager reviewing team load; ops owner configuring the priority rule.
 
+### Confidence & validation status
+
+- **High confidence — prototype behavior:** unified queue structure, visible rank/rationale, filtering, inline actions, session activity updates, deep-linking, and queue/email state propagation are directly demonstrated by the prototype.
+- **Medium confidence — workflow fit:** the JTBD and hybrid CSM/AE persona are coherent with the prototype, but still need confirmation with real users and real workload sizes.
+- **Lower confidence — business rules:** the ranking inputs, source of `committed`, snooze/completion semantics, email integration model, and final success metrics are intentionally unresolved and should not be treated as validated.
+
+
 ## Scope
 
 **In scope**
-- Single cross-object daily queue ranked by urgency then account value, with visible priority rationale.
+- Single cross-object daily queue ranked deterministically by urgency bucket, committed date, then account value, with visible priority rationale.
 - Counters for remaining / overdue / done.
 - Search plus When, Work type and Stage filters in one filter panel, with clear-search and reset-all controls.
 - Inline one-tap actions on each card: log call, add note, update stage, snooze (+1 / +3 / +7 days), complete.
@@ -41,21 +48,22 @@ Supporting jobs:
 - Configurable or ML-based prioritization; the ranking rule is fixed.
 - Manager/rollup views, reporting, quotas, forecasting.
 - Bulk actions, keyboard-driven queue navigation, notifications, mobile-native app.
-- Undo of an action after it is recorded, and edit of past activity entries.
+- Edit of past activity entries.
+- Production-grade undo semantics. The prototype may include a short-lived UI undo for Complete/Snooze only to test accidental-action recovery; persistence and conflict handling remain out of scope.
 
 ## Requirements
 
 | # | Requirement | Priority | Acceptance criteria |
 |---|---|---|---|
 | R1 | Unified queue across deal / onboarding / support / follow-up work | Must | One list renders items of all four work types; each card shows contact, account, work-type label, stage, account value, committed-date label. |
-| R2 | Deterministic prioritization | Must | Order is overdue → due today → upcoming; within a bucket earlier committed date wins; ties break by higher account value. Rank number is shown on each card. |
-| R3 | Visible priority rationale | Must | Each card shows a "Why here" line combining the committed-date label and account value, color-coded by urgency. |
+| R2 | Deterministic prioritization | Must | Order is overdue → due today → upcoming; within a bucket, earlier committed date wins; exact-date ties break by higher account value. Re-running the same dataset produces the same order. Rank number is shown on each card. |
+| R3 | Visible priority rationale | Must | Each card shows a "Why here" explanation that exposes the actual signals used by the current ranking rule: urgency/committed-date status and account value. The explanation must never imply that unmodeled signals such as SLA, renewal date or deal stage affected the rank. |
 | R4 | Urgency signalling | Must | Overdue = red badge, due today = yellow, upcoming = neutral, completed = green and dimmed card. |
 | R5 | Progress counters | Should | Header shows counts for items left, overdue, and done; counts update immediately after any action. |
 | R6 | One-tap log call / add note | Must | Action opens an inline single optional text field; saving with an empty field still succeeds; card's last-touch text updates and an entry appears in the activity feed. No required fields anywhere. |
 | R7 | Stage update from the card | Must | Stage options offered are only those valid for the item's work type; selecting one updates the card immediately. |
 | R8 | Snooze | Should | Tomorrow / +3 days / +7 days shift the committed date; the item re-sorts into its new position and its urgency badge updates. |
-| R9 | Complete | Must | Completing dims the card, marks it Done, hides its action row, and decrements "left". |
+| R9 | Complete | Must | Completing dims the card, marks it Done, hides its action row, decrements "left", and provides a short-lived UI undo so the interaction can be tested safely. Undo restores the prior in-memory state only. |
 | R10 | Session activity feed | Could | Each action appends a timestamped line to a "Just updated" list visible on the queue screen for the session. |
 | R11 | Search | Should | Free-text match over contact, account, next action and context; list filters as the user types. |
 | R12 | Filters | Should | When / Work type / Stage filters combine with search; a count of active filters is shown. |
@@ -76,11 +84,11 @@ Priority key: Must = the hypothesis fails without it; Should = needed for a cred
 
 **Entities (mocked, in-memory)**
 
-`QueueItem` — id, contact, account, workType (deal | onboarding | support | followup), stage, value (number), committed (ISO date), nextAction, context, lastTouch, done. Seeded with 12 records generated relative to today's date so urgency buckets are always populated.
+`QueueItem` — id, contact, account, workType (deal | onboarding | support | followup), stage, value (number), committed (ISO date), nextAction, context, lastTouch, done. Seeded with representative records generated relative to today's date so urgency buckets are always populated. The validation dataset should include deliberate ranking conflicts (for example, low-value overdue work versus high-value upcoming work) so users can challenge the ordering rather than only see obvious cases.
 
 `SentEmail` — id, itemId, to, contact, subject, body, timestamp. Session only.
 
-Derived, not stored: rank, urgency bucket, priority score, committed-date label, priority rationale, email address (`first.last@account.com`), subject and body drafts.
+Derived, not stored: rank, urgency bucket, committed-date label, priority rationale, email address (`first.last@account.com`), subject and body drafts. The current prototype does not need a separate weighted `priorityScore`; rank should be derived directly from the documented deterministic sort so the explanation and ordering cannot diverge.
 
 **Events the prototype records (client-side only, rendered into the activity/sent feeds):**
 - `call_logged` (itemId, optional note)
@@ -99,7 +107,30 @@ Derived, not stored: rank, urgency bucket, priority score, committed-date label,
 - Mocked: the dataset, email addresses and threads, the "fetch" itself (a timer with a manual failure switch in the sidebar), sending, the sidebar's non-queue records, and the awaiting-reply counter.
 - Absent: persistence, auth, API, deliverability, real timestamps beyond the session.
 
-**For a real build** these events would be emitted to an analytics sink and to the CRM activity timeline, and the priority score would be computed server-side so ordering is identical for every client.
+**For a real build** these events would be emitted to an analytics sink and to the CRM activity timeline, and the documented deterministic priority ordering would be computed server-side so ordering is identical for every client.
+
+## Prototype validation plan
+
+The next iteration should increase confidence by testing the riskiest assumptions rather than expanding feature breadth. No result below should be marked validated until observed with representative users.
+
+1. **Ranking trust test:** give users a realistic mixed queue with deliberately conflicting signals and ask what they would work first. Compare their ordering with the prototype and capture which signals they expected to matter.
+2. **Shadow-spreadsheet replacement test:** ask users to work through a simulated morning using only the queue, then ask whether they would still maintain a separate list and why.
+3. **Scale test:** test the queue with roughly 30–60 open items, including multiple overdue items, to check whether the ranking and filters still reduce rather than add cognitive load.
+4. **Action-semantics test:** test wording for Snooze and Complete with explicit descriptions of what would change in the CRM. Distinguish "remove from today" from "change committed date" and "mark queue item done" from "close underlying object".
+5. **Email workflow test:** compare in-product composition with a lightweight Gmail/Outlook handoff. Validate whether users need a full CRM email surface before committing to mailbox integration.
+6. **Measurement baseline:** before claiming success, establish the current time spent building the daily priority list and the current rate of stale/no-touch records so the prototype has a meaningful before/after comparison.
+
+### Proposed success criteria for validation
+
+These are test targets, not established baselines:
+
+- Users can identify their first action from the queue without reconstructing a separate list.
+- Users can explain why the top-ranked items are above lower-ranked items using the visible rationale.
+- Most routine updates can be recorded without leaving the queue.
+- The queue remains understandable with a high-load dataset (30–60 open items).
+- Users correctly predict what Snooze and Complete will change before confirming the action.
+- Primary product metric candidate: reduction in time spent creating the daily priority list.
+- Supporting metric candidates: percentage of queue items touched the same day; reduction in records with no logged touch in 7 days; percentage of test users who say they would no longer need a shadow spreadsheet for daily prioritization.
 
 ## Open questions
 
@@ -112,5 +143,5 @@ Derived, not stored: rank, urgency bucket, priority score, committed-date label,
 7. Contact data: real email addresses, consent state and suppression rules must replace the derived addresses before any send is enabled.
 8. Multi-user: is the queue strictly personal, or does a manager need visibility and reassignment?
 9. Offline / stale data: what does the queue show if the sync fails mid-day — cached list or the "No data" state?
-10. Undo: reps will mistap Complete. Is a short-lived undo required for Must?
-11. Success metrics: proposed primary is percentage of queue items touched the same day plus reduction in items with no logged touch in 7 days — needs agreement before instrumentation.
+10. Undo: the prototype uses a short-lived in-memory undo for accidental Complete actions; a real build still needs a decision on persistence, audit history, and whether Snooze/Stage changes also require undo.
+11. Success metrics: proposed primary is reduction in time spent creating the daily priority list; supporting candidates are percentage of queue items touched the same day, reduction in items with no logged touch in 7 days, and whether users still need a shadow spreadsheet. Baselines and target thresholds still need agreement before instrumentation.
